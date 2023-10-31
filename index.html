@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Korea Map with D3.js and Interactions</title>
+    <script src="https://d3js.org/d3.v5.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script>
+    <style>
+        /* Global Styles */
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f4f4f4;
+            color: #333;
+            margin: 0;
+            padding: 0px 20px 20px 20px;
+        }
+
+        h3, h4 {
+            margin-top: 0;
+        }
+        
+        h5 {
+            margin-top: 0;
+            font-size: 12px;
+        }
+        /* Hover Effect */
+        .hovered {
+            fill: #FFD700;
+        }
+
+        /* Tooltip */
+        .tooltip {
+            position: absolute;
+            background-color: white;
+            border: 1px solid black;
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 2px 2px 6px rgba(0, 0, 0, 0.1);
+            display: none;
+        }
+
+        /* Bar Chart Styles */
+        .bar {
+            fill: #0077b6;
+        }
+
+        /* Flex Container */
+        .container {
+            display: flex;
+            right: 10px;
+            gap: 20px;
+            flex-wrap: wrap;
+            margin-top: 20px;
+        }
+
+        /* Korea Map */
+        #koreaMap {
+            flex: 1;
+            position: relative;
+            border: 1px solid #ccc;
+            background-color: #fff;
+            border-radius: 8px;
+            padding: 10px;
+            box-shadow: 2px 2px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Legend */
+        .legend {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 5px;
+            border: 1px solid #ccc;
+        }
+
+        /* Chart Container */
+        #barChart, #locationPieChart, #partPieChart, #formPieChart {
+            flex: 1;
+            border: 1px solid #ccc;
+            background-color: #fff;
+            border-radius: 8px;
+            padding: 10px;
+            box-shadow: 2px 2px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        /* School List Styles */
+        #schoolList {
+            flex: 1;
+            height: 300px;
+            overflow-y: scroll;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            padding: 10px;
+            box-shadow: 2px 2px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        #schoolRanking {
+            flex: 1;
+            height: 300px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            padding: 10px;
+            box-shadow: 2px 2px 6px rgba(0, 0, 0, 0.1);
+        }
+        /* Menu Bar */
+        .header {
+            background-color: #0077b6;
+            overflow: hidden;
+            border-radius: 8px;
+            box-shadow: 2px 2px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Other Styles */
+        button {
+            display: block;
+            margin: 5px;
+            padding: 8px 12px;
+            border: none;
+            background-color: #0077b6;
+            color: white;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        select {
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+        }
+
+        .schoolHeader, .row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+
+        .column {
+            flex: 1;
+            margin-right: 10px;
+        }
+
+        .column:last-child {
+            margin-right: 0;
+        }
+
+        .ranked-list {
+            flex: 0.3;
+            overflow-y: scroll;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            padding: 5px;
+            box-shadow: 2px 2px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .ranked-list-item {
+            padding: 5px;
+            border-bottom: 1px solid #e0e0e0;
+        }  
+        .chartHeader {
+            text-align: center;
+            margin-bottom: 0px;
+            
+            align-items: center;
+            justify-content: center;
+        }
+        .chartBox {
+            background-color: #f7f7f7;
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        /* 검색창 스타일 */
+        #schoolSearchInput {
+            padding: 8px;
+            margin-right: 10px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+            width: calc(100% - 250px); /* 전체 너비에서 select 박스와 여백을 뺀 너비 */
+        }
+        #currentDateTime {
+            position: absolute; 
+            top: 31px;
+            right: 30px;
+            font-family: Arial, sans-serif;
+            font-size: 16px;
+            color: #ffffff;
+        }
+    </style>
+</head>
+
+<body>  
+    <h1 class="header" style="text-align: center; color: white; padding: 5px 5px; margin-bottom: 10px; font-size: 26px;">학교 사고 통계 대시보드</h1>
+    <h5>CSV/XLSX 파일 업로드:
+        <input type="file" id="csvFile" accept=".csv, .xlsx" multiple>
+        <span id="currentDateTime"></span>
+    </h5>
+      
+    <div class="row">
+        <div class="column">
+            <svg id="koreaMap" width="450" height="380"></svg>
+        </div>
+        <div class="column">
+            <div class="schoolContainer" style="width: 95%; height: 380px; border: 1px solid #ccc; background-color: #fff; border-radius: 8px; padding: 10px; box-shadow: 2px 2px 6px rgba(0, 0, 0, 0.1);">
+                <div class="schoolHeader">
+                    <h3 id="schoolTitle">학교목록</h3>
+                    <input type="text" id="schoolSearchInput" placeholder="학교 검색...">
+                    <select id="schoolTypeFilter">
+                        <option value="all">전체</option>
+                        <option value="유치원">유치원</option>
+                        <option value="초등학교">초등학교</option>
+                        <option value="중학교">중학교</option>
+                        <option value="고등학교">고등학교</option>
+                    </select>
+                </div>
+                <div id="schoolList"></div>
+            </div>
+        </div>
+        
+        <div class="column">
+    <div class="schoolContainer" style="width: 95%; height: 380px; border: 1px solid #ccc; background-color: #fff; border-radius: 8px; padding: 10px; box-shadow: 2px 2px 6px rgba(0, 0, 0, 0.1);">
+        <div class="schoolHeader">
+            <h3 id="schoolTitle">학교 사고 건수 순위</h3>
+            <select id="rankingSchoolTypeFilter">
+                <option value="all">전체</option>
+                <option value="유치원">유치원</option>
+                <option value="초등학교">초등학교</option>
+                <option value="중학교">중학교</option>
+                <option value="고등학교">고등학교</option>
+            </select>
+        </div>
+        <div id="rankedList"></div>
+    </div>
+</div>
+        <div class="column">
+            <div id="barChart" style="width: 100%; height: 380px;"></div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="column">
+            <div class="combinedPieCharts" style="width: 100%; height: 380px; border: 1px solid #ccc; background-color: #fff; border-radius: 8px; padding: 10px; box-shadow: 2px 2px 6px rgba(0, 0, 0, 0.1);">
+                <div class="chartHeader">
+                    <h3 id="selectedSchoolTitle">선택된 학교의 사고 정보</h3>
+                </div>
+                <div class="container" style="width: 100%; height: 330px;">
+                    <div id="locationPieChart" style="width: 100%; height: 310px; flex: 1; padding-right: 10px;">
+                        <h3 style="text-align: center;">사고장소</h3>
+                    </div>
+                    <div id="partPieChart" style="width: 100%; height: 310px; flex: 1; padding-left: 10px; padding-right: 10px;">
+                        <h3 style="text-align: center;">사고부위</h3>
+                    </div>
+                    <div id="formPieChart" style="width: 100%; height: 310px;flex: 1; padding-left: 10px;">
+                        <h3 style="text-align: center;">사고형태</h3>
+                    </div>
+                    
+                </div>
+            </div>
+        </div>
+            
+        </div>
+    </div>
+
+    <div class="tooltip" id="tooltip"></div>
+
+<script>
+    const tooltip = d3.select("#tooltip");
+    let combinedAccidentCounts = {};
+    let allData = [];
+
+    document.getElementById('csvFile').addEventListener('change', function(evt) {
+        allData = []; // 데이터 초기화
+        combinedAccidentCounts = {}; // 사고 건수 초기화
+        const files = evt.target.files;
+        let fileCounter = files.length;
+
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            const reader = new FileReader();
+
+            reader.onload = function(event) {
+                let data;
+                if (file.name.endsWith('.csv')) {
+                    data = d3.csvParse(event.target.result);
+                } else if (file.name.endsWith('.xlsx')) {
+                    const workbook = XLSX.read(event.target.result, { type: 'binary' });
+                    const sheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[sheetName];
+                    data = XLSX.utils.sheet_to_json(worksheet);
+                }
+
+                allData = allData.concat(data);
+
+                const accidentCounts = d3.nest()
+                    .key(d => d.지역)
+                    .rollup(v => v.length)
+                    .object(data);
+
+                for (let region in accidentCounts) {
+                    combinedAccidentCounts[region] = (combinedAccidentCounts[region] || 0) + accidentCounts[region];
+                }
+
+                fileCounter--;
+
+                if (fileCounter === 0) {
+                    renderMap(combinedAccidentCounts, allData);
+                    createBarChart(allData);
+                    createSchoolList(allData);
+                    createSchoolRanking(allData);
+                }
+            };
+
+            if (file.name.endsWith('.csv')) {
+                reader.readAsText(file);
+            } else if (file.name.endsWith('.xlsx')) {
+                reader.readAsBinaryString(file);
+            }
+        }
+    });
+
+    function updateDateTime() {
+        var now = new Date();
+        var year = now.getFullYear();
+        var month = now.getMonth() + 1;  // 월은 0부터 시작하므로 1을 더합니다.
+        var day = now.getDate();
+        var hours = now.getHours();
+        var minutes = now.getMinutes();
+        var seconds = now.getSeconds();
+
+        // 10 미만의 숫자 앞에 0을 추가합니다.
+        month = month < 10 ? '0' + month : month;
+        day = day < 10 ? '0' + day : day;
+        hours = hours < 10 ? '0' + hours : hours;
+        minutes = minutes < 10 ? '0' + minutes : minutes;
+        seconds = seconds < 10 ? '0' + seconds : seconds;
+
+        var dateTimeString = year + '-' + month + '-' + day + ' ' + hours + ':' + minutes + ':' + seconds;
+        document.getElementById('currentDateTime').innerText = dateTimeString;
+    }
+
+    // 페이지가 로드될 때 현재 날짜와 시간을 업데이트합니다.
+    window.onload = function() {
+        updateDateTime();
+        // 1초마다 시간을 업데이트합니다.
+        setInterval(updateDateTime, 1000);
+    };
+
+
+    function renderMap(accidentCounts, data) {
+        d3.json('korea.json').then(function(koreaData) {
+            const svg = d3.select('#koreaMap');
+            const projection = d3.geoMercator().fitSize([450, 380], koreaData);
+            const path = d3.geoPath().projection(projection);
+
+            const colorScale = d3.scaleSequential(d3.interpolateBlues)
+                .domain([0, d3.max(Object.values(accidentCounts))]);
+
+            svg.selectAll('path').remove();
+            // 범례 관련 요소들을 삭제합니다.
+            svg.selectAll("defs").remove();
+            svg.selectAll("rect").remove();
+            svg.selectAll("g.y.axis").remove();
+
+            svg.selectAll('path')
+                .data(koreaData.features)
+                .enter()
+                .append('path')
+                .attr('d', path)
+                .attr('stroke', 'black')
+                .attr('fill', d => colorScale(accidentCounts[d.properties.name] || 0))
+                .on('mouseover', function(d) {
+                    d3.select(this).classed('hovered', true);
+                    tooltip.style("display", "block")
+                        .html(d.properties.name + ": " + (accidentCounts[d.properties.name] || 0) + " 사고");
+                })
+                .on('mousemove', function(d) {
+                    tooltip.style("top", (d3.event.pageY - 10) + "px")
+                        .style("left", (d3.event.pageX + 10) + "px");
+                })
+                .on('mouseout', function(d) {
+                    d3.select(this).classed('hovered', false);
+                    tooltip.style("display", "none");
+                })
+                .on('click', function(d) {
+                    filterSchoolsByRegion(data, d.properties.name);
+                    createSchoolRanking(allData, d.properties.name);
+                });
+
+            // 범례 추가
+            const defs = svg.append("defs");
+            const linearGradient = defs.append("linearGradient")
+                .attr("id", "legendGradient")
+                .attr("x1", "0%")
+                .attr("y1", "100%")
+                .attr("x2", "0%")
+                .attr("y2", "0%");
+
+            linearGradient.append("stop")
+                .attr("offset", "0%")
+                .attr("stop-color", colorScale(0));
+
+            linearGradient.append("stop")
+                .attr("offset", "100%")
+                .attr("stop-color", colorScale(d3.max(Object.values(accidentCounts))));
+
+            const legendWidth = 8;
+            const legendHeight = 100;
+            const legendY = 380 - legendHeight - 10;
+            const legendX = 10;
+
+            svg.append("rect")
+                .attr("x", legendX)
+                .attr("y", legendY)
+                .attr("width", legendWidth)
+                .attr("height", legendHeight)
+                .style("fill", "url(#legendGradient)");
+
+            const y = d3.scaleLinear()
+                .range([legendHeight, 0])
+                .domain([0, d3.max(Object.values(accidentCounts))]);
+
+            const yAxis = d3.axisRight(y).ticks(5);
+            
+            svg.append("g")
+                .attr("class", "y axis")
+                .attr("transform", `translate(${legendX + legendWidth}, ${legendY})`)
+                .call(yAxis);
+        });
+    }
+
+
+    function createBarChart(data) {
+
+        const populationData = {
+        '서울': 806340,
+        '부산': 299960,
+        '대구': 242833,
+        '인천': 306493,
+        '광주': 169208,
+        '대전': 156416,
+        '울산': 128973,
+        '세종': 58523,
+        '경기': 1488586,
+        '강원': 146273,
+        '충북': 165540,
+        '충남': 234192,
+        '전북': 188639,
+        '전남': 181977,
+        '경북': 254181,
+        '경남': 367073,
+        '제주': 79847
+    };
+
+        const accidentByRegion = d3.nest()
+        .key(d => d.지역)
+        .rollup(v => (v.length / populationData[v[0].지역]) * 100000) // 10만명당 사고 비율
+        .entries(data);
+
+        const margin = {top: 20, right: 20, bottom: 30, left: 40};
+        const width = 600 - margin.left - margin.right;
+        const height = 387 - margin.top - margin.bottom;
+
+        const x = d3.scaleBand().range([0, width]).padding(0.1);
+        const y = d3.scaleLinear().range([height, 0]);
+
+        d3.select("#barChart svg").remove();
+
+        const svg = d3.select("#barChart").append("svg")
+            .attr("width", width + margin.left + margin.right)
+            .attr("height", height + margin.top + margin.bottom)
+            .append("g")
+            .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+        x.domain(accidentByRegion.map(d => d.key));
+        y.domain([0, d3.max(accidentByRegion, d => d.value)]);
+
+        svg.selectAll(".bar")
+            .data(accidentByRegion)
+            .enter().append("rect")
+            .attr("class", "bar")
+            .attr("x", d => x(d.key))
+            .attr("width", x.bandwidth())
+            .attr("y", d => y(d.value))
+            .attr("height", d => height - y(d.value))
+            .on("mouseover", function(d) {
+                tooltip.style("display", "block")
+                    .html(d.key + ": " + d.value.toFixed(2) + " 사고/10만명"); // 툴팁에 사고 비율 표시
+            })
+            .on("mousemove", function(d) {
+                tooltip.style("top", (d3.event.pageY - 10) + "px")
+                    .style("left", (d3.event.pageX + 10) + "px");
+            })
+            .on("mouseout", function(d) {
+                tooltip.style("display", "none");
+            });
+
+        svg.append("g")
+            .attr("transform", "translate(0," + height + ")")
+            .call(d3.axisBottom(x));
+
+        svg.append("g")
+            .call(d3.axisLeft(y));
+
+        svg.append("text")
+            .attr("x", width / 2)
+            .attr("y", height + margin.bottom - 1)
+            .attr("text-anchor", "middle")
+            .style("font-size", "10px")
+            .style("fill", "#666")
+            .text("계산식: 지역별 사고 건수 / 지역별 학생 수 * 100,000");
+
+
+        svg.append("text")
+            .attr("x", width / 2)             
+            .attr("y", 0 + (margin.top / 2 - 15))
+            .attr("text-anchor", "middle")  
+            .style("font-size", "17px") 
+            .style("text-decoration", "underline")  
+            .text("지역별 학생 10만명당 사고 비율");
+        }
+        
+
+    function createPieCharts(schoolData, schoolName) {
+        createPieChart(schoolData, "사고장소", "locationPieChart");
+        createPieChart(schoolData, "사고부위", "partPieChart");
+        createPieChart(schoolData, "사고형태", "formPieChart");
+        document.getElementById('selectedSchoolTitle').innerText = schoolName + " 사고정보";
+    }
+
+    function createPieChart(data, key, chartId) {
+        const accidentsByKey = d3.nest()
+            .key(d => d[key])
+            .rollup(v => v.length)
+            .entries(data);
+
+        const totalAccidents = d3.sum(accidentsByKey, d => d.value);
+
+        const width = 500;
+        const height = 300;
+        const radius = Math.min(width, height) / 2.5;
+
+        const color = d3.scaleOrdinal(d3.schemeCategory10);
+
+        const arc = d3.arc()
+            .outerRadius(radius - 10)
+            .innerRadius(radius / 2); // 중앙을 뚫기 위해 내부 반지름 값을 설정
+
+        const pie = d3.pie()
+            .sort(null)
+            .value(d => d.value);
+
+        d3.select("#" + chartId + " svg").remove();
+
+        
+        const svg = d3.select("#" + chartId).append("svg")
+            .attr("width", width + 50)
+            .attr("height", height)
+            .append("g")
+            .attr("transform", "translate(" + width / 2 + "," + (height / 2 -25) + ")");
+
+        const defs = svg.append("defs");
+        const gradient = defs.selectAll(".gradient")
+            .data(pie(accidentsByKey))
+            .enter().append("linearGradient")
+            .attr("id", (d, i) => "gradient" + i)
+            .attr("x1", "0%")
+            .attr("y1", "0%")
+            .attr("x2", "100%")
+            .attr("y2", "100%");
+
+        gradient.append("stop")
+            .attr("offset", "0%")
+            .attr("stop-color", d => d3.rgb(color(d.data.key)).brighter(1))
+            .attr("stop-opacity", 1);
+
+        gradient.append("stop")
+            .attr("offset", "100%")
+            .attr("stop-color", d => color(d.data.key))
+            .attr("stop-opacity", 1);
+
+        const g = svg.selectAll(".arc")
+            .data(pie(accidentsByKey))
+            .enter().append("g")
+            .attr("class", "arc");
+
+        g.append("path")
+            .attr("d", arc)
+            .style("fill", (d, i) => "url(#gradient" + i + ")")
+            // 애니메이션 효과를 적용합니다.
+            .transition()
+            .duration(1000) // 1초 동안 애니메이션됩니다.
+            .attrTween("d", function(d) {
+                const interpolate = d3.interpolate(
+                    {startAngle: d.startAngle, endAngle: d.startAngle},
+                    {startAngle: d.startAngle, endAngle: d.endAngle}
+                );
+                return function(t) {
+                    return arc(interpolate(t));
+                };
+            });
+
+        // 중앙에 전체 사고 건수 표시
+        svg.append("text")
+            .attr("dy", ".35em")
+            .style("text-anchor", "middle")
+            .style("font-size", "14px")
+            .style("font-weight", "bold")
+            .text((totalAccidents) + "건");
+
+        // 범례 생성
+        const legend = svg.selectAll(".legend")
+            .data(pie(accidentsByKey))
+            .enter().append("g")
+            .attr("class", "legend")
+            .attr("transform", (d, i) => "translate(" + (radius + 30) + "," + (i * 20 - accidentsByKey.length * 10) + ")");
+
+        legend.append("rect")
+            .attr("x", 0)
+            .attr("y", 0)
+            .attr("width", 10)
+            .attr("height", 10)
+            .style("fill", d => color(d.data.key));
+
+        legend.append("text")
+            .attr("x", 15)
+            .attr("y", 5)
+            .attr("dy", ".35em")
+            .style("text-anchor", "start")
+            .style("font-size", "12px")
+            .text(d => d.data.key + ": " + d.data.value);
+    }
+
+
+    function filterSchoolsByType(data, type = 'all') {
+        if (type === 'all') return data;
+        return data.filter(item => {
+            if (type === '유치원' && item.학교명.includes('유치원')) return true;
+            if (type === '초등학교' && item.학교명.includes('초등학교')) return true;
+            if (type === '중학교' && item.학교명.includes('중학교')) return true;
+            if (type === '고등학교' && item.학교명.includes('고등학교')) return true;
+            return false;
+        });
+    }
+
+    function filterSchoolsByRegion(data, region) {
+        const schoolsInRegion = data.filter(item => item.지역 === region);
+        createSchoolList(schoolsInRegion);
+
+        // 지역 이름을 사용하여 학교 목록의 제목을 설정
+        document.getElementById("schoolTitle").innerText = region + " 학교목록";
+    }
+
+    // 검색 입력 필드를 가져옵니다.
+    const schoolSearchInput = document.getElementById('schoolSearchInput');
+
+    // 검색 입력 필드의 이벤트 리스너를 추가합니다.
+    schoolSearchInput.addEventListener('input', function() {
+        // 현재 입력된 검색어를 가져옵니다.
+        const searchTerm = schoolSearchInput.value.toLowerCase();
+        // 학교 목록을 필터링합니다.
+        createSchoolList(allData, searchTerm);
+    });
+
+    function createSchoolList(data, searchTerm = '') {
+        let filteredData = filterSchoolsByType(data, schoolTypeFilter.value);
+
+        // 검색어에 따라 결과를 필터링합니다.
+        if (searchTerm) {
+            filteredData = filteredData.filter(item => 
+                item.학교명.toLowerCase().includes(searchTerm)
+            );
+        }
+
+        const schoolNames = Array.from(new Set(filteredData.map(item => item.학교명)));
+        const schoolListDiv = document.getElementById('schoolList');
+        schoolListDiv.innerHTML = '';
+
+        schoolNames.forEach(schoolName => {
+            const button = document.createElement("button");
+            button.innerHTML = schoolName;
+            button.onclick = () => {
+                const schoolData = allData.filter(item => item.학교명 === schoolName);
+                createPieCharts(schoolData, schoolName);
+            };
+            schoolListDiv.appendChild(button);
+        });
+    }
+
+    const schoolTypeFilter = document.getElementById('schoolTypeFilter');
+    schoolTypeFilter.addEventListener('change', function() {
+        createSchoolList(allData);
+    });
+
+    function createSchoolRanking(data) {
+        const rankingSchoolTypeFilter = document.getElementById('rankingSchoolTypeFilter');
+        const type = rankingSchoolTypeFilter.value;
+
+        let filteredSchools = filterSchoolsByType(data, type);
+
+        const schoolAccidents = d3.nest()
+            .key(d => d.학교명)
+            .rollup(v => v.length)
+            .entries(filteredSchools)
+            .sort((a, b) => b.value - a.value)
+            .slice(0, 10);  // 상위 5개 학교만 선택
+
+        renderRankingList(schoolAccidents);
+
+        rankingSchoolTypeFilter.addEventListener('change', function() {
+            createSchoolRanking(data);
+        });
+    }
+
+
+    function renderRankingList(schoolAccidents) {
+        const rankedListDiv = document.getElementById('rankedList');
+        rankedListDiv.innerHTML = '';  // 기존 내용 초기화
+
+
+        schoolAccidents.forEach((school, index) => {
+            const listItem = document.createElement("div");
+            listItem.className = "ranked-list-item";
+            listItem.innerHTML = `${index + 1}. ${school.key}: ${school.value}건`;
+            rankedListDiv.appendChild(listItem);
+        });
+        
+    }
+
+
+
+</script>
+
+</body>
+
+</html>
